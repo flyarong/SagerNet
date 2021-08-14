@@ -2,9 +2,7 @@ import cn.hutool.core.util.ZipUtil
 import cn.hutool.crypto.digest.DigestUtil
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
 import org.apache.commons.compress.compressors.xz.XZCompressorOutputStream
-import org.apache.commons.compress.compressors.xz.XZUtils
 import org.gradle.api.Project
 import org.kohsuke.github.GitHubBuilder
 import java.io.File
@@ -181,8 +179,8 @@ fun Project.downloadAssets() {
             }
 
         ZipUtil.get(cacheFile, null, "browserforwarder/index.js").use {
-            File(assets, "v2ray/index.js").outputStream().use { out ->
-                it.copyTo(out)
+            File(assets, "v2ray/index.js.xz").outputStream().use { out ->
+                it.copyTo(XZCompressorOutputStream(out, 9))
             }
         }
 

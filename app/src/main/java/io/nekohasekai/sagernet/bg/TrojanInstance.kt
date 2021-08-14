@@ -19,24 +19,22 @@
  *                                                                            *
  ******************************************************************************/
 
-package io.nekohasekai.sagernet.plugin.trojan_go
+package io.nekohasekai.sagernet.bg
 
-import android.net.Uri
-import android.os.ParcelFileDescriptor
-import io.nekohasekai.sagernet.plugin.NativePluginProvider
-import io.nekohasekai.sagernet.plugin.PathProvider
-import java.io.File
-import java.io.FileNotFoundException
+import kotlinx.coroutines.CoroutineScope
+import libsagernet.TrojanInstance
 
-class BinaryProvider : NativePluginProvider() {
-    override fun populateFiles(provider: PathProvider) {
-        provider.addPath("trojan-go-plugin", 0b111101101)
+class TrojanInstance(val config: String) : AbstractInstance {
+
+    val point = TrojanInstance()
+
+    override fun launch() {
+        point.loadConfig(config, true)
+        point.start()
     }
 
-    override fun getExecutable() = context!!.applicationInfo.nativeLibraryDir + "/libtrojan-go.so"
-    override fun openFile(uri: Uri): ParcelFileDescriptor = when (uri.path) {
-        "/trojan-go-plugin" -> ParcelFileDescriptor.open(File(getExecutable()),
-            ParcelFileDescriptor.MODE_READ_ONLY)
-        else -> throw FileNotFoundException()
+    override fun destroy(scope: CoroutineScope) {
+        point.close()
     }
+
 }

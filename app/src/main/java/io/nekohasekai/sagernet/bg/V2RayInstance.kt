@@ -27,7 +27,6 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import io.nekohasekai.sagernet.IPv6Mode
 import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.TrojanProvider
 import io.nekohasekai.sagernet.bg.socks.Socks4To5Instance
@@ -66,9 +65,7 @@ import io.netty.resolver.dns.PackagePrivateBridge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import libv2ray.Libv2ray
-import libv2ray.V2RayPoint
-import libv2ray.V2RayVPNServiceSupportsSet
+import libsagernet.V2RayInstance
 import java.io.File
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicBoolean
@@ -79,7 +76,7 @@ abstract class V2RayInstance(
 
     abstract val eventLoopGroup: EventLoopGroup
     lateinit var config: V2rayBuildResult
-    lateinit var v2rayPoint: V2RayPoint
+    lateinit var v2rayPoint: V2RayInstance
     private lateinit var wsForwarder: WebView
 
     val pluginPath = hashMapOf<String, PluginManager.InitResult>()
@@ -97,7 +94,7 @@ abstract class V2RayInstance(
     }
 
     protected open fun initInstance() {
-        v2rayPoint = Libv2ray.newV2RayPoint(NoSupportSet(), false)
+        v2rayPoint = V2RayInstance()
     }
 
     protected open fun buildConfig() {
@@ -107,7 +104,6 @@ abstract class V2RayInstance(
     open fun init() {
         initInstance()
         buildConfig()
-        v2rayPoint.domainName = "$LOCALHOST:11451"
         for ((isBalancer, chain) in config.index) {
             chain.entries.forEachIndexed { index, (port, profile) ->
                 val needChain = !isBalancer && index != chain.size - 1
@@ -129,16 +125,20 @@ abstract class V2RayInstance(
                                 pluginConfigs[port] = profile.type to bean.buildTrojanConfig(port)
                             }
                             TrojanProvider.TROJAN_GO -> {
-                                initPlugin("trojan-go-plugin")
-                                pluginConfigs[port] = profile.type to bean.buildTrojanGoConfig(
-                                    port, mux
+                                externalInstances[port] = TrojanInstance(
+                                    bean.buildTrojanGoConfig(
+                                        port, mux
+                                    )
                                 )
                             }
                         }
                     }
                     bean is TrojanGoBean -> {
-                        initPlugin("trojan-go-plugin")
-                        pluginConfigs[port] = profile.type to bean.buildTrojanGoConfig(port, mux)
+                        externalInstances[port] = TrojanInstance(
+                            bean.buildTrojanGoConfig(
+                                port, mux
+                            )
+                        )
                     }
                     bean is NaiveBean -> {
                         initPlugin("naive-plugin")
@@ -162,14 +162,15 @@ abstract class V2RayInstance(
                     bean is ConfigBean -> {
                         when (bean.type) {
                             "trojan-go" -> {
-                                initPlugin("trojan-go-plugin")
-                                pluginConfigs[port] = profile.type to buildCustomTrojanConfig(
-                                    bean.content, port
+                                externalInstances[port] = TrojanInstance(
+                                    buildCustomTrojanConfig(
+                                        bean.content, port
+                                    )
                                 )
                             }
                             else -> {
                                 externalInstances[port] = ExternalInstance(
-                                    v2rayPoint.supportSet, profile, port, eventLoopGroup
+                                    profile, port, eventLoopGroup
                                 ).apply {
                                     init()
                                 }
@@ -185,7 +186,7 @@ abstract class V2RayInstance(
             }
         }
 
-        v2rayPoint.configureFileContent = config.config
+        v2rayPoint.loadConfig(config.config)
     }
 
     private val dnsResolverIPv4Only by lazy {
@@ -257,46 +258,35 @@ abstract class V2RayInstance(
                         )
                     }
                     bean is TrojanBean -> {
-                        val configFile = File(
-                            context.noBackupFilesDir,
-                            "trojan_" + SystemClock.elapsedRealtime() + ".json"
-                        )
-
-                        configFile.parentFile?.mkdirs()
-                        configFile.writeText(config)
-                        cacheFiles.add(configFile)
-
-                        val commands = mutableListOf<String>()
-
                         when (DataStore.providerTrojan) {
                             TrojanProvider.TROJAN -> {
+                                val configFile = File(
+                                    context.noBackupFilesDir,
+                                    "trojan_" + SystemClock.elapsedRealtime() + ".json"
+                                )
+
+                                configFile.parentFile?.mkdirs()
+                                configFile.writeText(config)
+                                cacheFiles.add(configFile)
+
+                                val commands = mutableListOf<String>()
+
                                 commands.add(initPlugin("trojan-plugin").path)
+
+                                commands.add("--config")
+                                commands.add(configFile.absolutePath)
+
+                                processes.start(commands)
                             }
                             TrojanProvider.TROJAN_GO -> {
-                                commands.add(initPlugin("trojan-go-plugin").path)
-                                //commands.add("-config") // but why?
+                                externalInstances[port]!!.launch()
                             }
                         }
 
-                        commands.add("--config")
-                        commands.add(configFile.absolutePath)
 
-                        processes.start(commands)
                     }
                     bean is TrojanGoBean || bean is ConfigBean && bean.type == "trojan-go" -> {
-                        val configFile = File(
-                            context.noBackupFilesDir,
-                            "trojan_go_" + SystemClock.elapsedRealtime() + ".json"
-                        )
-                        configFile.parentFile?.mkdirs()
-                        configFile.writeText(config)
-                        cacheFiles.add(configFile)
-
-                        val commands = mutableListOf(
-                            initPlugin("trojan-go-plugin").path, "-config", configFile.absolutePath
-                        )
-
-                        processes.start(commands)
+                        externalInstances[port]!!.launch()
                     }
                     bean is NaiveBean -> {
                         val configFile = File(
@@ -416,7 +406,7 @@ abstract class V2RayInstance(
             }
         }
 
-        v2rayPoint.runLoop(DataStore.ipv6Mode >= IPv6Mode.PREFER)
+        v2rayPoint.start()
 
         if (config.requireWs) {
             val url = "http://$LOCALHOST:" + (config.wsPort) + "/"
@@ -470,31 +460,12 @@ abstract class V2RayInstance(
         }
 
         if (::v2rayPoint.isInitialized) {
-            v2rayPoint.stopLoop()
+            v2rayPoint.close()
         }
 
         for (instance in externalInstances.values) {
             instance.destroy(scope)
         }
     }
-
-    private class NoSupportSet : V2RayVPNServiceSupportsSet {
-        override fun onEmitStatus(status: String) {
-            Logs.i("onEmitStatus $status")
-        }
-
-        override fun protect(fd: Long) = true
-    }
-
-    class SagerSupportSet(val service: VpnService) : V2RayVPNServiceSupportsSet {
-        override fun onEmitStatus(status: String) {
-            Logs.i("onEmitStatus $status")
-        }
-
-        override fun protect(fd: Long): Boolean {
-            return service.protect(fd.toInt())
-        }
-    }
-
 
 }

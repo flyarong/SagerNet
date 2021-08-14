@@ -62,7 +62,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.channel.socket.nio.NioSocketChannel
 import kotlinx.coroutines.DEBUG_PROPERTY_NAME
 import kotlinx.coroutines.DEBUG_PROPERTY_VALUE_ON
-import libv2ray.Libv2ray
+import libsagernet.Libsagernet
 import org.conscrypt.Conscrypt
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 import java.security.Security
@@ -93,8 +93,9 @@ class SagerNet : Application(),
 
         Seq.setContext(this)
         val externalAssets = getExternalFilesDir(null) ?: filesDir
-        Libv2ray.setAssetsPath(externalAssets.absolutePath, "v2ray/")
-        Libv2ray.setenv("v2ray.conf.geoloader", "memconservative")
+        Libsagernet.initializeV2Ray(externalAssets.absolutePath, "v2ray/")
+        Libsagernet.setenv("v2ray.conf.geoloader", "memconservative")
+        Libsagernet.setProtector { true }
 
         runOnDefaultDispatcher {
             externalAssets.mkdirs()
