@@ -23,6 +23,7 @@ package io.nekohasekai.sagernet.fmt;
 
 import androidx.room.TypeConverter;
 
+import com.esotericsoftware.kryo.KryoException;
 import com.esotericsoftware.kryo.io.ByteBufferInput;
 import com.esotericsoftware.kryo.io.ByteBufferOutput;
 
@@ -34,6 +35,7 @@ import cn.hutool.core.util.ArrayUtil;
 import io.nekohasekai.sagernet.database.SubscriptionBean;
 import io.nekohasekai.sagernet.fmt.brook.BrookBean;
 import io.nekohasekai.sagernet.fmt.http.HttpBean;
+import io.nekohasekai.sagernet.fmt.hysteria.HysteriaBean;
 import io.nekohasekai.sagernet.fmt.internal.BalancerBean;
 import io.nekohasekai.sagernet.fmt.internal.ChainBean;
 import io.nekohasekai.sagernet.fmt.internal.ConfigBean;
@@ -48,6 +50,7 @@ import io.nekohasekai.sagernet.fmt.trojan_go.TrojanGoBean;
 import io.nekohasekai.sagernet.fmt.v2ray.VLESSBean;
 import io.nekohasekai.sagernet.fmt.v2ray.VMessBean;
 import io.nekohasekai.sagernet.ktx.KryosKt;
+import io.nekohasekai.sagernet.ktx.Logs;
 
 public class KryoConverters {
 
@@ -67,8 +70,11 @@ public class KryoConverters {
     public static <T extends Serializable> T deserialize(T bean, byte[] bytes) {
         ByteArrayInputStream input = new ByteArrayInputStream(bytes);
         ByteBufferInput buffer = KryosKt.byteBuffer(input);
-        bean.deserializeFromBuffer(buffer);
-        IoUtil.close(buffer);
+        try {
+            bean.deserializeFromBuffer(buffer);
+        } catch (KryoException e) {
+            Logs.INSTANCE.w(e);
+        }
         bean.initializeDefaultValues();
         return bean;
     }
@@ -161,6 +167,12 @@ public class KryoConverters {
     public static BrookBean brookDeserialize(byte[] bytes) {
         if (ArrayUtil.isEmpty(bytes)) return null;
         return deserialize(new BrookBean(), bytes);
+    }
+
+    @TypeConverter
+    public static HysteriaBean hysteriaDeserialize(byte[] bytes) {
+        if (ArrayUtil.isEmpty(bytes)) return null;
+        return deserialize(new HysteriaBean(), bytes);
     }
 
     @TypeConverter

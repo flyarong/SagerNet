@@ -7,12 +7,12 @@ include(":library:proto")
 include(":library:proto-stub")
 
 include(":plugin:api")
-include(":plugin:trojan-go")
 include(":plugin:naive")
 include(":plugin:pingtunnel")
 include(":plugin:relaybaton")
 include(":plugin:brook")
 include(":plugin:trojan")
+include(":plugin:hysteria")
 
 include(":external:preferencex:preferencex")
 include(":external:preferencex:preferencex-simplemenu")

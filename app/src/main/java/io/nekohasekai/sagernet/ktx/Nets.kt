@@ -19,12 +19,11 @@
  *                                                                            *
  ******************************************************************************/
 
+@file:Suppress("SpellCheckingInspection")
+
 package io.nekohasekai.sagernet.ktx
 
 import android.os.Build
-import cn.hutool.core.lang.Validator
-import inet.ipaddr.IPAddress
-import inet.ipaddr.IPAddressString
 import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.bg.VpnService
 import io.nekohasekai.sagernet.database.DataStore
@@ -32,7 +31,7 @@ import io.nekohasekai.sagernet.fmt.AbstractBean
 import io.nekohasekai.sagernet.fmt.LOCALHOST
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
-import io.netty.buffer.UnpooledDirectByteBuf
+import io.netty.util.NetUtil
 import okhttp3.ConnectionSpec
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
@@ -86,7 +85,7 @@ fun HttpUrl.Builder.toLink(scheme: String, appendDefaultPort: Boolean = true): S
 }
 
 fun String.isIpAddress(): Boolean {
-    return Validator.isIpv4(this) || Validator.isIpv6(this)
+    return NetUtil.isValidIpV4Address(this) || NetUtil.isValidIpV6Address(this)
 }
 
 fun String.unwrapHost(): String {
@@ -97,7 +96,7 @@ fun String.unwrapHost(): String {
 }
 
 fun AbstractBean.wrapUri(): String {
-    return if (Validator.isIpv6(finalAddress)) {
+    return if (NetUtil.isValidIpV6Address(finalAddress)) {
         "[$finalAddress]:$finalPort"
     } else {
         "$finalAddress:$finalPort"
@@ -105,9 +104,8 @@ fun AbstractBean.wrapUri(): String {
 }
 
 fun parseAddress(addressArray: ByteArray) = InetAddress.getByAddress(addressArray)
-val INET_TUN = IPAddressString(VpnService.PRIVATE_VLAN4_CLIENT).address.toInetAddress()
-val INET6_TUN = IPAddressString(VpnService.PRIVATE_VLAN6_CLIENT).address.toInetAddress()
-val INET_LO = IPAddressString(LOCALHOST).getAddress(IPAddress.IPVersion.IPV4).toInetAddress()
+val INET_TUN = InetAddress.getByName(VpnService.PRIVATE_VLAN4_CLIENT)
+val INET6_TUN = InetAddress.getByName(VpnService.PRIVATE_VLAN6_CLIENT)
 
 fun mkPort(): Int {
     val socket = Socket()
@@ -124,3 +122,9 @@ fun ByteBuf.toByteArray(): ByteArray {
     }
     return array()
 }
+
+const val IPPROTO_ICMP = 1
+const val IPPROTO_ICMPv6 = 58
+
+const val IPPROTO_TCP = 6
+const val IPPROTO_UDP = 17

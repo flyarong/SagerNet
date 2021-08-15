@@ -100,14 +100,14 @@
     <string name="project">Проект</string>
     <string name="app_desc">Универсальный набор инструментов прокси для Android, написанный на Kotlin.</string>
     <plurals name="added">
-        <item quantity="one">Добавлен</item>
-        <item quantity="few">прокси добавлены</item>
+        <item quantity="one"/>
+        <item quantity="few">Добавлен</item>
         <item quantity="many">%d прокси добавлены</item>
         <item quantity="other">%d прокси добавлены</item>
     </plurals>
     <plurals name="removed">
-        <item quantity="one">Удаленный</item>
-        <item quantity="few">элементы удалены</item>
+        <item quantity="one"/>
+        <item quantity="few">Удаленный</item>
         <item quantity="many">%d элементы удалены</item>
         <item quantity="other">%d элементы удалены</item>
     </plurals>
@@ -174,8 +174,6 @@
     <string name="ip_other_strategy">Другая стратегия интернет-протокола</string>
     <string name="icmp_echo_reply_delay">Задержка эхо-ответа ICMP</string>
     <string name="icmp_echo_strategy">Эхо-стратегия ICMP</string>
-    <string name="multi_thread_forwarding_sum">Пересылка пакетов TCP/IP с помощью сопрограммы Kotlin, которая использует больше ЦП и подходит только для случаев с высоким трафиком</string>
-    <string name="multi_thread_forwarding">Параллельная пересылка</string>
     <string name="vpn_mode_forwarding">Собственная переадресация</string>
     <string name="vpn_mode">Режим VPN</string>
     <string name="vpn_settings">Настройки VPN</string>
@@ -287,12 +285,12 @@
     <string name="stop">Останавливаться</string>
     <string name="service_failed">Не удалось:</string>
     <string name="invalid_server">Неверное имя сервера</string>
-    <string name="forward_success">SagerNet запустился.</string>
+    <string name="forward_success">Прокси запустился.</string>
     <string name="service_proxy">Прокси-сервис</string>
     <string name="service_vpn">VPN-сервис</string>
     <string name="direct_boot_aware_summary">Выбранная вами информация профиля будет менее защищена</string>
     <string name="direct_boot_aware">Разрешить переключение на экране блокировки</string>
-    <string name="auto_connect_summary">Включить SagerNet при запуске / обновлении приложения, если он был запущен раньше</string>
+    <string name="auto_connect_summary">Включить прокси при запуске/обновлении приложения, если он был запущен раньше</string>
     <string name="auto_connect">Автоматическое подключение</string>
     <string name="show_system_apps">Показать системные приложения</string>
     <string name="bypass_apps">Обход</string>
@@ -369,4 +367,9 @@
     <string name="protocol_param">Параметр протокола</string>
     <string name="username_opt">Имя пользователя (необязательно)</string>
     <string name="speed">%s/s</string>
+    <string name="hysteria_download_mbps">Максимальная скорость загрузки (в Мбит / с)</string>
+    <string name="hysteria_upload_mbps">Максимальная скорость загрузки (в Мбит / с)</string>
+    <string name="hysteria_auth_payload">Полезные данные аутентификации</string>
+    <string name="hysteria_auth_type">Тип аутентификации</string>
+    <string name="hysteria_obfs">Обфускация пароля</string>
 </resources>

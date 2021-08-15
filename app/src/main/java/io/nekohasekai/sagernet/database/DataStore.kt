@@ -53,11 +53,44 @@ object DataStore : OnPreferenceDataStoreChangeListener {
         SagerNet.currentProfile?.groupId ?: 0L
     }
 
-    fun selectedGroupForImport(): Long {
+    fun currentGroupId(): Long {
+        val currentSelected = selectedGroup
+        if (currentSelected > 0L) return currentSelected
         val groups = SagerDatabase.groupDao.allGroups()
-        val sid = DataStore.selectedGroup
-        return (groups.find { it.id == sid && it.type == GroupType.BASIC }
-            ?: groups.find { it.ungrouped }!!).id
+        if (groups.isNotEmpty()) {
+            val groupId = groups[0].id
+            selectedGroup = groupId
+            return groupId
+        }
+        val groupId = SagerDatabase.groupDao.createGroup(ProxyGroup(ungrouped = true))
+        selectedGroup = groupId
+        return groupId
+    }
+
+    fun currentGroup(): ProxyGroup {
+        var group: ProxyGroup? = null
+        val currentSelected = selectedGroup
+        if (currentSelected > 0L) {
+            group = SagerDatabase.groupDao.getById(currentSelected)
+        }
+        if (group != null) return group
+        val groups = SagerDatabase.groupDao.allGroups()
+        if (groups.isEmpty()) {
+            group = ProxyGroup(ungrouped = true).apply {
+                id = SagerDatabase.groupDao.createGroup(this)
+            }
+        } else {
+            group = groups[0]
+        }
+        selectedGroup = group.id
+        return group
+    }
+
+    fun selectedGroupForImport(): Long {
+        val current = currentGroup()
+        if (current.type == GroupType.BASIC) return current.id
+        val groups = SagerDatabase.groupDao.allGroups()
+        return groups.find { it.type == GroupType.BASIC }!!.id
     }
 
     var appTheme by configurationStore.int(Key.APP_THEME)
@@ -161,7 +194,6 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var alwaysShowAddress by configurationStore.boolean(Key.ALWAYS_SHOW_ADDRESS)
 
     var vpnMode by configurationStore.stringToInt(Key.VPN_MODE)
-    var multiThreadForward by configurationStore.boolean(Key.MULTI_THREAD_FORWARD)
     var icmpEchoStrategy by configurationStore.stringToInt(Key.ICMP_ECHO_STRATEGY)
     var icmpEchoReplyDelay by configurationStore.stringToLong(Key.ICMP_ECHO_REPLY_DELAY) { 50 }
     var ipOtherStrategy by configurationStore.stringToInt(Key.IP_OTHER_STRATEGY) { PacketStrategy.DIRECT }
@@ -209,6 +241,15 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var serverEarlyDataHeaderName by profileCacheStore.string(Key.SERVER_EARLY_DATA_HEADER_NAME)
     var serverHeaders by profileCacheStore.string(Key.SERVER_HEADERS)
     var serverAllowInsecure by profileCacheStore.boolean(Key.SERVER_ALLOW_INSECURE)
+
+    var serverVMessExperimentalAuthenticatedLength by profileCacheStore.boolean(Key.SERVER_VMESS_EXPERIMENTAL_AUTHENTICATED_LENGTH)
+    var serverVMessExperimentalNoTerminationSignal by profileCacheStore.boolean(Key.SERVER_VMESS_EXPERIMENTAL_NO_TERMINATION_SIGNAL)
+
+    var serverAuthType by profileCacheStore.stringToInt(Key.SERVER_AUTH_TYPE)
+    var serverUploadSpeed by profileCacheStore.stringToInt(Key.SERVER_UPLOAD_SPEED)
+    var serverDownloadSpeed by profileCacheStore.stringToInt(Key.SERVER_DOWNLOAD_SPEED)
+
+    var serverSocksVersion by profileCacheStore.stringToInt(Key.SERVER_PROTOCOL)
 
     var balancerType by profileCacheStore.stringToInt(Key.BALANCER_TYPE)
     var balancerGroup by profileCacheStore.stringToLong(Key.BALANCER_GROUP)

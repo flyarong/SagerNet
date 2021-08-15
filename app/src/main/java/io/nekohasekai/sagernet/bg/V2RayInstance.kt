@@ -27,9 +27,9 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import io.nekohasekai.sagernet.IPv6Mode
 import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.TrojanProvider
+import io.nekohasekai.sagernet.bg.socks.Socks4To5Instance
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.ProxyEntity
 import io.nekohasekai.sagernet.fmt.LOCALHOST
@@ -37,6 +37,8 @@ import io.nekohasekai.sagernet.fmt.V2rayBuildResult
 import io.nekohasekai.sagernet.fmt.brook.BrookBean
 import io.nekohasekai.sagernet.fmt.brook.internalUri
 import io.nekohasekai.sagernet.fmt.buildV2RayConfig
+import io.nekohasekai.sagernet.fmt.hysteria.HysteriaBean
+import io.nekohasekai.sagernet.fmt.hysteria.buildHysteriaConfig
 import io.nekohasekai.sagernet.fmt.internal.ConfigBean
 import io.nekohasekai.sagernet.fmt.naive.NaiveBean
 import io.nekohasekai.sagernet.fmt.naive.buildNaiveConfig
@@ -47,34 +49,39 @@ import io.nekohasekai.sagernet.fmt.shadowsocks.ShadowsocksBean
 import io.nekohasekai.sagernet.fmt.shadowsocks.buildShadowsocksConfig
 import io.nekohasekai.sagernet.fmt.shadowsocksr.ShadowsocksRBean
 import io.nekohasekai.sagernet.fmt.shadowsocksr.buildShadowsocksRConfig
+import io.nekohasekai.sagernet.fmt.socks.SOCKSBean
 import io.nekohasekai.sagernet.fmt.trojan.TrojanBean
 import io.nekohasekai.sagernet.fmt.trojan.buildTrojanConfig
 import io.nekohasekai.sagernet.fmt.trojan.buildTrojanGoConfig
 import io.nekohasekai.sagernet.fmt.trojan_go.TrojanGoBean
 import io.nekohasekai.sagernet.fmt.trojan_go.buildCustomTrojanConfig
 import io.nekohasekai.sagernet.fmt.trojan_go.buildTrojanGoConfig
-import io.nekohasekai.sagernet.ktx.Logs
-import io.nekohasekai.sagernet.ktx.getValue
-import io.nekohasekai.sagernet.ktx.runOnMainDispatcher
-import io.nekohasekai.sagernet.ktx.setValue
+import io.nekohasekai.sagernet.ktx.*
 import io.nekohasekai.sagernet.plugin.PluginManager
+import io.netty.channel.EventLoopGroup
+import io.netty.resolver.ResolvedAddressTypes
+import io.netty.resolver.dns.DnsNameResolverBuilder
+import io.netty.resolver.dns.PackagePrivateBridge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
-import libv2ray.Libv2ray
-import libv2ray.V2RayPoint
-import libv2ray.V2RayVPNServiceSupportsSet
+import kotlinx.coroutines.runBlocking
+import libsagernet.V2RayInstance
 import java.io.File
+import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicBoolean
 
-open class V2RayInstance(val profile: ProxyEntity) {
+abstract class V2RayInstance(
+    val profile: ProxyEntity
+) : AbstractInstance {
 
+    abstract val eventLoopGroup: EventLoopGroup
     lateinit var config: V2rayBuildResult
-    lateinit var v2rayPoint: V2RayPoint
+    lateinit var v2rayPoint: V2RayInstance
     private lateinit var wsForwarder: WebView
 
     val pluginPath = hashMapOf<String, PluginManager.InitResult>()
     val pluginConfigs = hashMapOf<Int, Pair<Int, String>>()
-    val externalInstances = hashMapOf<Int, V2RayInstance>()
+    val externalInstances = hashMapOf<Int, AbstractInstance>()
     open lateinit var processes: GuardedProcessPool
     private var cacheFiles = ArrayList<File>()
     var closed by AtomicBoolean()
@@ -87,7 +94,7 @@ open class V2RayInstance(val profile: ProxyEntity) {
     }
 
     protected open fun initInstance() {
-        v2rayPoint = Libv2ray.newV2RayPoint(NoSupportSet(), false)
+        v2rayPoint = V2RayInstance()
     }
 
     protected open fun buildConfig() {
@@ -97,7 +104,6 @@ open class V2RayInstance(val profile: ProxyEntity) {
     open fun init() {
         initInstance()
         buildConfig()
-        v2rayPoint.domainName = "$LOCALHOST:11451"
         for ((isBalancer, chain) in config.index) {
             chain.entries.forEachIndexed { index, (port, profile) ->
                 val needChain = !isBalancer && index != chain.size - 1
@@ -119,16 +125,20 @@ open class V2RayInstance(val profile: ProxyEntity) {
                                 pluginConfigs[port] = profile.type to bean.buildTrojanConfig(port)
                             }
                             TrojanProvider.TROJAN_GO -> {
-                                initPlugin("trojan-go-plugin")
-                                pluginConfigs[port] = profile.type to bean.buildTrojanGoConfig(
-                                    port, mux
+                                externalInstances[port] = TrojanInstance(
+                                    bean.buildTrojanGoConfig(
+                                        port, mux
+                                    )
                                 )
                             }
                         }
                     }
                     bean is TrojanGoBean -> {
-                        initPlugin("trojan-go-plugin")
-                        pluginConfigs[port] = profile.type to bean.buildTrojanGoConfig(port, mux)
+                        externalInstances[port] = TrojanInstance(
+                            bean.buildTrojanGoConfig(
+                                port, mux
+                            )
+                        )
                     }
                     bean is NaiveBean -> {
                         initPlugin("naive-plugin")
@@ -145,29 +155,53 @@ open class V2RayInstance(val profile: ProxyEntity) {
                     bean is BrookBean -> {
                         initPlugin("brook-plugin")
                     }
+                    bean is HysteriaBean -> {
+                        initPlugin("hysteria-plugin")
+                        pluginConfigs[port] = profile.type to bean.buildHysteriaConfig(port)
+                    }
                     bean is ConfigBean -> {
                         when (bean.type) {
                             "trojan-go" -> {
-                                initPlugin("trojan-go-plugin")
-                                pluginConfigs[port] = profile.type to buildCustomTrojanConfig(
-                                    bean.content, port
+                                externalInstances[port] = TrojanInstance(
+                                    buildCustomTrojanConfig(
+                                        bean.content, port
+                                    )
                                 )
                             }
                             else -> {
-                                externalInstances[port] = ExternalInstance(v2rayPoint.supportSet, profile, port).apply {
+                                externalInstances[port] = ExternalInstance(
+                                    profile, port, eventLoopGroup
+                                ).apply {
                                     init()
                                 }
                             }
                         }
                     }
+                    bean is SOCKSBean -> {
+                        externalInstances[port] = Socks4To5Instance(
+                            eventLoopGroup, bean, port, dnsResolverIPv4Only
+                        )
+                    }
                 }
             }
         }
 
-        v2rayPoint.configureFileContent = config.config
+        v2rayPoint.loadConfig(config.config)
     }
 
-    open fun launch() {
+    private val dnsResolverIPv4Only by lazy {
+        DnsNameResolverBuilder().eventLoop(eventLoopGroup.next())
+            .channelType(SagerNet.datagramChannel)
+            .nameServerProvider(
+                PackagePrivateBridge.mkDnsProvider(
+                    InetSocketAddress(LOCALHOST, DataStore.localDNSPort)
+                )
+            )
+            .resolvedAddressTypes(ResolvedAddressTypes.IPV4_ONLY)
+            .build()
+    }
+
+    override fun launch() {
         val context = if (Build.VERSION.SDK_INT < 24 || SagerNet.user.isUserUnlocked) SagerNet.application else SagerNet.deviceStorage
 
         for ((isBalancer, chain) in config.index) {
@@ -224,46 +258,35 @@ open class V2RayInstance(val profile: ProxyEntity) {
                         )
                     }
                     bean is TrojanBean -> {
-                        val configFile = File(
-                            context.noBackupFilesDir,
-                            "trojan_" + SystemClock.elapsedRealtime() + ".json"
-                        )
-
-                        configFile.parentFile?.mkdirs()
-                        configFile.writeText(config)
-                        cacheFiles.add(configFile)
-
-                        val commands = mutableListOf<String>()
-
                         when (DataStore.providerTrojan) {
                             TrojanProvider.TROJAN -> {
+                                val configFile = File(
+                                    context.noBackupFilesDir,
+                                    "trojan_" + SystemClock.elapsedRealtime() + ".json"
+                                )
+
+                                configFile.parentFile?.mkdirs()
+                                configFile.writeText(config)
+                                cacheFiles.add(configFile)
+
+                                val commands = mutableListOf<String>()
+
                                 commands.add(initPlugin("trojan-plugin").path)
+
+                                commands.add("--config")
+                                commands.add(configFile.absolutePath)
+
+                                processes.start(commands)
                             }
                             TrojanProvider.TROJAN_GO -> {
-                                commands.add(initPlugin("trojan-go-plugin").path)
-                                //commands.add("-config") // but why?
+                                externalInstances[port]!!.launch()
                             }
                         }
 
-                        commands.add("--config")
-                        commands.add(configFile.absolutePath)
 
-                        processes.start(commands)
                     }
                     bean is TrojanGoBean || bean is ConfigBean && bean.type == "trojan-go" -> {
-                        val configFile = File(
-                            context.noBackupFilesDir,
-                            "trojan_go_" + SystemClock.elapsedRealtime() + ".json"
-                        )
-                        configFile.parentFile?.mkdirs()
-                        configFile.writeText(config)
-                        cacheFiles.add(configFile)
-
-                        val commands = mutableListOf(
-                            initPlugin("trojan-go-plugin").path, "-config", configFile.absolutePath
-                        )
-
-                        processes.start(commands)
+                        externalInstances[port]!!.launch()
                     }
                     bean is NaiveBean -> {
                         val configFile = File(
@@ -354,14 +377,36 @@ open class V2RayInstance(val profile: ProxyEntity) {
 
                         processes.start(commands)
                     }
-                    bean is ConfigBean -> {
+                    bean is HysteriaBean -> {
+                        val configFile = File(
+                            context.noBackupFilesDir,
+                            "hysteria_" + SystemClock.elapsedRealtime() + ".json"
+                        )
+
+                        configFile.parentFile?.mkdirs()
+                        configFile.writeText(config)
+                        cacheFiles.add(configFile)
+
+                        val commands = mutableListOf(
+                            initPlugin("hysteria-plugin").path,
+                            "--no-check",
+                            "--config",
+                            configFile.absolutePath,
+                            "--log-level",
+                            if (DataStore.enableLog) "trace" else "warn",
+                            "client"
+                        )
+
+                        processes.start(commands)
+                    }
+                    bean is ConfigBean || bean is SOCKSBean -> {
                         externalInstances[port]!!.launch()
                     }
                 }
             }
         }
 
-        v2rayPoint.runLoop(DataStore.ipv6Mode >= IPv6Mode.PREFER)
+        v2rayPoint.start()
 
         if (config.requireWs) {
             val url = "http://$LOCALHOST:" + (config.wsPort) + "/"
@@ -398,7 +443,11 @@ open class V2RayInstance(val profile: ProxyEntity) {
 
     }
 
-    open fun destroy(scope: CoroutineScope) {
+    fun destroy() {
+        runBlocking { onMainDispatcher { destroy(this) } }
+    }
+
+    override fun destroy(scope: CoroutineScope) {
         cacheFiles.removeAll { it.delete(); true }
 
         if (::wsForwarder.isInitialized) {
@@ -411,31 +460,12 @@ open class V2RayInstance(val profile: ProxyEntity) {
         }
 
         if (::v2rayPoint.isInitialized) {
-            v2rayPoint.stopLoop()
+            v2rayPoint.close()
         }
 
         for (instance in externalInstances.values) {
             instance.destroy(scope)
         }
     }
-
-    private class NoSupportSet : V2RayVPNServiceSupportsSet {
-        override fun onEmitStatus(status: String) {
-            Logs.i("onEmitStatus $status")
-        }
-
-        override fun protect(fd: Long) = true
-    }
-
-    class SagerSupportSet(val service: VpnService) : V2RayVPNServiceSupportsSet {
-        override fun onEmitStatus(status: String) {
-            Logs.i("onEmitStatus $status")
-        }
-
-        override fun protect(fd: Long): Boolean {
-            return service.protect(fd.toInt())
-        }
-    }
-
 
 }

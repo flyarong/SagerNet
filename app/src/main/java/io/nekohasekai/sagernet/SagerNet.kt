@@ -43,14 +43,26 @@ import io.nekohasekai.sagernet.database.SagerDatabase
 import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.app
 import io.nekohasekai.sagernet.ktx.checkMT
-import io.nekohasekai.sagernet.ktx.runOnMainDispatcher
+import io.nekohasekai.sagernet.ktx.runOnDefaultDispatcher
 import io.nekohasekai.sagernet.ui.MainActivity
 import io.nekohasekai.sagernet.utils.DeviceStorageApp
 import io.nekohasekai.sagernet.utils.PackageCache
 import io.nekohasekai.sagernet.utils.Theme
+import io.netty.channel.EventLoopGroup
+import io.netty.channel.epoll.EpollDatagramChannel
+import io.netty.channel.epoll.EpollEventLoopGroup
+import io.netty.channel.epoll.EpollServerSocketChannel
+import io.netty.channel.epoll.EpollSocketChannel
+import io.netty.channel.nio.NioEventLoopGroup
+import io.netty.channel.socket.DatagramChannel
+import io.netty.channel.socket.ServerSocketChannel
+import io.netty.channel.socket.SocketChannel
+import io.netty.channel.socket.nio.NioDatagramChannel
+import io.netty.channel.socket.nio.NioServerSocketChannel
+import io.netty.channel.socket.nio.NioSocketChannel
 import kotlinx.coroutines.DEBUG_PROPERTY_NAME
 import kotlinx.coroutines.DEBUG_PROPERTY_VALUE_ON
-import libv2ray.Libv2ray
+import libsagernet.Libsagernet
 import org.conscrypt.Conscrypt
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 import java.security.Security
@@ -64,6 +76,8 @@ class SagerNet : Application(),
 
         application = this
     }
+
+    val externalAssets by lazy { getExternalFilesDir(null) ?: filesDir }
 
     override fun onCreate() {
         super.onCreate()
@@ -79,9 +93,11 @@ class SagerNet : Application(),
 
         Seq.setContext(this)
         val externalAssets = getExternalFilesDir(null) ?: filesDir
-        Libv2ray.setAssetsPath(externalAssets.absolutePath, "v2ray/")
+        Libsagernet.initializeV2Ray(externalAssets.absolutePath, "v2ray/")
+        Libsagernet.setenv("v2ray.conf.geoloader", "memconservative")
+        Libsagernet.setProtector { true }
 
-        runOnMainDispatcher {
+        runOnDefaultDispatcher {
             externalAssets.mkdirs()
             checkMT()
 
@@ -92,6 +108,21 @@ class SagerNet : Application(),
         Theme.applyNightTheme()
 
         Security.insertProviderAt(Conscrypt.newProvider(), 1)
+
+        try {
+            System.loadLibrary("netty_transport_native_epoll")
+            serverSocketChannel = EpollServerSocketChannel::class.java
+            socketChannel = EpollSocketChannel::class.java
+            datagramChannel = EpollDatagramChannel::class.java
+            eventLoopGroup = { EpollEventLoopGroup() }
+        } catch (e: UnsatisfiedLinkError) {
+            Logs.w(e)
+            serverSocketChannel = NioServerSocketChannel::class.java
+            socketChannel = NioSocketChannel::class.java
+            datagramChannel = NioDatagramChannel::class.java
+            eventLoopGroup = { NioEventLoopGroup() }
+        }
+
     }
 
     fun getPackageInfo(packageName: String) = packageManager.getPackageInfo(
@@ -112,6 +143,11 @@ class SagerNet : Application(),
 
     companion object {
 
+        lateinit var serverSocketChannel: Class<out ServerSocketChannel>
+        lateinit var socketChannel: Class<out SocketChannel>
+        lateinit var datagramChannel: Class<out DatagramChannel>
+        lateinit var eventLoopGroup: () -> EventLoopGroup
+
         var started = false
 
         lateinit var application: SagerNet
@@ -124,7 +160,7 @@ class SagerNet : Application(),
                 PendingIntent.getActivity(
                     it, 0, Intent(
                         application, MainActivity::class.java
-                    ).setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT), 0
+                    ).setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT), PendingIntent.FLAG_IMMUTABLE
                 )
             }
         }

@@ -31,6 +31,7 @@ import io.nekohasekai.sagernet.database.SubscriptionBean
 import io.nekohasekai.sagernet.fmt.AbstractBean
 import io.nekohasekai.sagernet.fmt.brook.BrookBean
 import io.nekohasekai.sagernet.fmt.http.HttpBean
+import io.nekohasekai.sagernet.fmt.hysteria.HysteriaBean
 import io.nekohasekai.sagernet.fmt.naive.NaiveBean
 import io.nekohasekai.sagernet.fmt.relaybaton.RelayBatonBean
 import io.nekohasekai.sagernet.fmt.socks.SOCKSBean
@@ -75,15 +76,17 @@ abstract class GroupUpdater {
         if (connected) {
             val remoteDns = DataStore.remoteDns
             when {
-                remoteDns.startsWith("https+local://") -> dohUrl =
-                    remoteDns.replace("https+local://", "https://")
+                remoteDns.startsWith("https+local://") -> dohUrl = remoteDns.replace(
+                    "https+local://", "https://"
+                )
                 remoteDns.startsWith("https://") -> dohUrl = remoteDns
             }
         } else {
             val directDns = DataStore.directDns
             when {
-                directDns.startsWith("https+local://") -> dohUrl =
-                    directDns.replace("https+local://", "https://")
+                directDns.startsWith("https+local://") -> dohUrl = directDns.replace(
+                    "https+local://", "https://"
+                )
                 directDns.startsWith("https://") -> dohUrl = directDns
             }
         }
@@ -161,6 +164,9 @@ abstract class GroupUpdater {
                 is TrojanGoBean -> {
                     if (sni.isBlank()) sni = bean.serverAddress
                 }
+                is HysteriaBean -> {
+                    if (sni.isBlank()) sni = bean.serverAddress
+                }
             }
 
             bean.serverAddress = address
@@ -188,9 +194,9 @@ abstract class GroupUpdater {
 
                 val timeout = Duration.ofSeconds(5)
                 val httpClient = createProxyClient().newBuilder()
-                        .connectTimeout(timeout)
-                        .readTimeout(timeout)
-                        .build()
+                    .connectTimeout(timeout)
+                    .readTimeout(timeout)
+                    .build()
                 val userInterface = GroupManager.userInterface
 
                 if (userInterface != null) {

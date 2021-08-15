@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SagerNet</string>
+    <string name="app_name" translatable="false">SagerNet</string>
     <string name="app_desc">The universal proxy toolchain for Android, written in Kotlin.</string>
     <string name="project">Project</string>
     <string name="github">Source code</string>
@@ -177,13 +177,13 @@
     <string name="bypass_apps">Bypass</string>
     <string name="show_system_apps">Show system apps</string>
     <string name="auto_connect">Auto Connect</string>
-    <string name="auto_connect_summary">Enable SagerNet on startup/app update if it was running before</string>
+    <string name="auto_connect_summary">Enable proxy on startup/app update if it was running before</string>
     <string name="direct_boot_aware">Allow Toggling in Lock Screen</string>
     <string name="direct_boot_aware_summary">Your selected profile information will be less protected</string>
     <!-- notification category -->
     <string name="service_vpn">VPN Service</string>
     <string name="service_proxy">Proxy Service</string>
-    <string name="forward_success">SagerNet started.</string>
+    <string name="forward_success">Proxy started.</string>
     <string name="invalid_server">Invalid server name</string>
     <string name="service_failed">Failed: </string>
     <string name="stop">Stop</string>
@@ -213,6 +213,7 @@
     <string name="action_ping_tunnel" translatable="false">Ping Tunnel</string>
     <string name="action_relay_baton" translatable="false">RelayBaton</string>
     <string name="action_brook" translatable="false">Brook</string>
+    <string name="action_hysteria" translatable="false">Hysteria</string>
     <string name="proxy_chain">Proxy Chain</string>
     <string name="custom_config">Custom Config</string>
     <string name="balancer">Balancer</string>
@@ -330,8 +331,6 @@
     <string name="vpn_settings">VPN Settings</string>
     <string name="vpn_mode">VPN Mode</string>
     <string name="vpn_mode_forwarding">Native Forwarding</string>
-    <string name="multi_thread_forwarding">Concurrent Forwarding</string>
-    <string name="multi_thread_forwarding_sum">Forward TCP/IP packets using Kotlin coroutine, which uses more CPU and is only suitable for high traffic cases</string>
     <string name="icmp_echo_strategy">ICMP Echo Strategy</string>
     <string name="icmp_echo_reply_delay">ICMP Echo Reply Delay</string>
     <string name="ip_other_strategy">Other Internet Protocol Strategy</string>
@@ -395,4 +394,12 @@
     <string name="select_apps">Select Applications</string>
     <string name="apps_message">%d Applications</string>
     <string name="need_nf">To support application-based routing, the VPN Mode must be Native Forwarding.</string>
+    <string name="hysteria_obfs">Obfuscation Password</string>
+    <string name="hysteria_auth_type">Authentication Type</string>
+    <string name="hysteria_auth_payload">Authentication Payload</string>
+    <string name="hysteria_upload_mbps">Max Upload Speed (in Mbps)</string>
+    <string name="hysteria_download_mbps">Max Download Speed (in Mbps)</string>
+    <string name="experimental_settings">Experimental</string>
+    <string name="experimental_authenticated_length">Make the length of each payload segment no longer malleable. This experiment requires the server and client use the same version of v2ray-core. More breaking updates on this experiment is expected.</string>
+    <string name="experimental_no_termination_signal">Do not send connection single duplex termination signal for TCP connection when transferred over VMess. This will break some application.</string>
 </resources>

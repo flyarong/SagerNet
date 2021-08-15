@@ -28,17 +28,21 @@ import com.v2ray.core.app.stats.command.GetStatsRequest
 import com.v2ray.core.app.stats.command.StatsServiceGrpcKt
 import io.grpc.ManagedChannel
 import io.grpc.StatusException
+import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.ProxyEntity
 import io.nekohasekai.sagernet.database.SagerDatabase
 import io.nekohasekai.sagernet.ktx.*
 import io.nekohasekai.sagernet.utils.DirectBoot
 import kotlinx.coroutines.*
-import libv2ray.Libv2ray
+import libsagernet.Libsagernet
 import java.io.IOException
 
-class ProxyInstance(profile: ProxyEntity, val service: BaseService.Interface) : V2RayInstance(profile) {
+class ProxyInstance(profile: ProxyEntity, val service: BaseService.Interface) : V2RayInstance(
+    profile
+) {
 
+    override val eventLoopGroup by lazy { SagerNet.eventLoopGroup() }
     lateinit var managedChannel: ManagedChannel
     val statsService by lazy { StatsServiceGrpcKt.StatsServiceCoroutineStub(managedChannel) }
     val observatoryService by lazy {
@@ -48,10 +52,9 @@ class ProxyInstance(profile: ProxyEntity, val service: BaseService.Interface) : 
 
     override fun initInstance() {
         if (service is VpnService) {
-            v2rayPoint = Libv2ray.newV2RayPoint(SagerSupportSet(service), false)
-        } else {
-            super.initInstance()
+            Libsagernet.setProtector { service.protect(it.toInt()) }
         }
+        super.initInstance()
     }
 
     override fun init() {
@@ -76,8 +79,9 @@ class ProxyInstance(profile: ProxyEntity, val service: BaseService.Interface) : 
                 val interval = 10000L
                 while (isActive) {
                     try {
-                        val statusList =
-                            observatoryService.getOutboundStatus(GetOutboundStatusRequest.getDefaultInstance()).status.statusList
+                        val statusList = observatoryService.getOutboundStatus(
+                            GetOutboundStatusRequest.getDefaultInstance()
+                        ).status.statusList
                         if (!isActive) break
                         statusList.forEach { status ->
                             val profileId = status.outboundTag.substringAfter("global-")
@@ -128,6 +132,8 @@ class ProxyInstance(profile: ProxyEntity, val service: BaseService.Interface) : 
         if (::managedChannel.isInitialized) {
             managedChannel.shutdownNow()
         }
+
+        eventLoopGroup.shutdownGracefully()
     }
 
     // ------------- stats -------------
@@ -150,10 +156,12 @@ class ProxyInstance(profile: ProxyEntity, val service: BaseService.Interface) : 
             return 0L
         }
         try {
-            return statsService.getStats(GetStatsRequest.newBuilder()
-                .setName("outbound>>>$tag>>>traffic>>>$direct")
-                .setReset(true)
-                .build()).stat.value
+            return statsService.getStats(
+                GetStatsRequest.newBuilder()
+                    .setName("outbound>>>$tag>>>traffic>>>$direct")
+                    .setReset(true)
+                    .build()
+            ).stat.value
         } catch (e: StatusException) {
             if (e.status.description?.contains("not found") == true) {
                 return 0L
@@ -180,10 +188,14 @@ class ProxyInstance(profile: ProxyEntity, val service: BaseService.Interface) : 
         config.outboundTagsAll.filterKeys { !config.outboundTags.contains(it) }
     }
 
-    class OutboundStats(val proxyEntity: ProxyEntity, var uplinkTotal: Long = 0L, var downlinkTotal: Long = 0L)
+    class OutboundStats(
+        val proxyEntity: ProxyEntity, var uplinkTotal: Long = 0L, var downlinkTotal: Long = 0L
+    )
 
     private val statsOutbounds = hashMapOf<Long, OutboundStats>()
-    private fun registerStats(proxyEntity: ProxyEntity, uplink: Long? = null, downlink: Long? = null) {
+    private fun registerStats(
+        proxyEntity: ProxyEntity, uplink: Long? = null, downlink: Long? = null
+    ) {
         if (proxyEntity.id == outboundStats.proxyEntity.id) return
         val stats = statsOutbounds.getOrPut(proxyEntity.id) {
             OutboundStats(proxyEntity)

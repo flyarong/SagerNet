@@ -25,22 +25,22 @@ jobs:
           permission: "write"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  v2ray:
-    name: Native Build (V2Ray)
+  libcore:
+    name: Native Build (LibCore)
     runs-on: ubuntu-latest
     needs: check
     steps:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Fetch Status
-        run: git submodule status library/v2ray > v2ray_status
-      - name: V2Ray Cache
+        run: git submodule status library/libcore > libcore_status
+      - name: LibCore Cache
         id: cache
         uses: actions/cache@v2
         with:
           path: |
-            app/libs/libv2ray.aar
-          key: ${{ hashFiles('bin/lib/v2ray/*', 'v2ray_status') }}
+            app/libs/libsagernet.aar
+          key: ${{ hashFiles('bin/lib/v2ray/*', 'libcore_status') }}
       - name: Install Golang
         uses: actions/setup-go@v2
         if: steps.cache.outputs.cache-hit != 'true'
@@ -244,7 +244,7 @@ jobs:
     if: github.event.inputs.play != 'y'
     runs-on: ubuntu-latest
     needs:
-      - v2ray
+      - libcore
       - shadowsocks
       - shadowsocksr
     steps:
@@ -254,13 +254,13 @@ jobs:
         run: |
           git submodule status 'library/shadowsocks/*' > shadowsocks_status
           git submodule status 'library/shadowsocksr/*' > shadowsocksr_status
-          git submodule status library/v2ray > v2ray_status
-      - name: V2Ray Cache
+          git submodule status library/libcore > libcore_status
+      - name: LibCore Cache
         uses: actions/cache@v2
         with:
           path: |
-            app/libs/libv2ray.aar
-          key: ${{ hashFiles('bin/lib/v2ray/*', 'v2ray_status') }}
+            app/libs/sagernet.aar
+          key: ${{ hashFiles('bin/lib/v2ray/*', 'libcore_status') }}
       - name: Shadowsocks Cache
         uses: actions/cache@v2
         with:
